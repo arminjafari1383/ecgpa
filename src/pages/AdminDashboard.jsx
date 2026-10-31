@@ -48,7 +48,7 @@ function Stat({ label, value, hint, tone = "" }) {
 }
 
 export default function AdminDashboard() {
-  const [otp, setOtp] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [session, setSession] = useState(() => sessionStorage.getItem("admin_session_token") || "");
   const [data, setData] = useState(null);
   const [active, setActive] = useState("overview");
@@ -69,7 +69,6 @@ export default function AdminDashboard() {
   }), []);
 
   const refresh = useCallback(async (token = session) => {
-    if (!token) return;
     setLoading(true); setError("");
     try {
       const response = await fetchDashboard(token);
@@ -80,18 +79,18 @@ export default function AdminDashboard() {
     } finally { setLoading(false); }
   }, [session, fetchDashboard, clearSession]);
 
-  useEffect(() => { if (session && !data) refresh(session); }, [session, data, refresh]);
+  useEffect(() => { if (!data) refresh(""); }, [data, refresh]);
 
   const login = async () => {
-    if (!/^\d{6}$/.test(otp)) { setError("کد ۶ رقمی Google Authenticator را وارد کنید."); return; }
+    if (!adminPassword.trim()) { setError("رمز عبور مدیریت را وارد کنید."); return; }
     setLoading(true); setError("");
     try {
-      const r = await api.post("/admin/session/", {}, { headers: { "X-Admin-OTP": otp } });
+      const r = await api.post("/admin/session/", { admin_password: adminPassword });
       const token = r?.data?.admin_session;
       if (!token) throw new Error("توکن ورود از سرور دریافت نشد.");
       const dashboard = await fetchDashboard(token);
       sessionStorage.setItem("admin_session_token", token);
-      setSession(token); setData(dashboard.data); setOtp("");
+      setSession(token); setData(dashboard.data); setAdminPassword("");
     } catch (e) { clearSession(); setError(errorText(e)); }
     finally { setLoading(false); }
   };
@@ -148,13 +147,12 @@ export default function AdminDashboard() {
 
   if (!data) return <main className="ap-shell ap-login" dir="rtl">
     <div className="ap-login-card">
-      <div className="ap-brand-mark">A</div><p className="ap-eyebrow">AI POLIFY · CONTROL CENTER</p>
-      <h1>ورود به پنل مدیریت</h1><p className="ap-muted">برای دسترسی امن، کد یک‌بارمصرف Google Authenticator را وارد کنید.</p>
-      <label htmlFor="admin-otp">کد امنیتی ۶ رقمی</label>
-      <input id="admin-otp" className="ap-otp" value={otp} maxLength={6} inputMode="numeric" autoComplete="one-time-code" placeholder="000000" onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} onKeyDown={(e) => e.key === "Enter" && login()} />
-      {error && <div className="ap-alert error">{error}</div>}
-      <button className="ap-primary full" onClick={login} disabled={loading}>{loading ? "در حال بررسی…" : "ورود امن به پنل"}</button>
-      <small className="ap-muted">اتصال رمزنگاری‌شده · نشست زمان‌دار</small>
+      <div className="ap-brand-mark">A</div>
+      <p className="ap-eyebrow">POLIFY · PUBLIC DASHBOARD</p>
+      <h1>داشبورد عمومی</h1>
+      <p className="ap-muted">{loading ? "در حال دریافت اطلاعات…" : error || "اتصال به سرور برقرار نشد."}</p>
+      <button className="ap-primary full" onClick={() => refresh("")} disabled={loading}>تلاش مجدد</button>
+      <small className="ap-muted">حالت فقط مشاهده · عملیات مالی غیرفعال</small>
     </div>
   </main>;
 
@@ -174,7 +172,7 @@ export default function AdminDashboard() {
     <section className="ap-main">
       <header className="ap-topbar">
         <div><span className="ap-eyebrow">CONTROL CENTER / {active.toUpperCase()}</span><h1>{title}</h1><p>مدیریت و نظارت یکپارچه بر فعالیت‌های برنامه</p></div>
-        <div className="ap-top-actions"><span className="ap-session"><i/> نشست امن فعال</span><button className="ap-ghost" onClick={() => refresh()} disabled={loading}>↻ {loading ? "در حال بروزرسانی" : "بروزرسانی"}</button><button className="ap-logout" onClick={() => { clearSession(); setActive("overview"); }}>خروج</button></div>
+        <div className="ap-top-actions"><span className="ap-session"><i/> مشاهده عمومی · فقط خواندنی</span><button className="ap-ghost" onClick={() => refresh()} disabled={loading}>↻ {loading ? "در حال بروزرسانی" : "بروزرسانی"}</button></div>
       </header>
       {error && <div className="ap-alert error">{error}</div>}
       {toast && <div className="ap-toast">{toast}</div>}
@@ -212,15 +210,13 @@ export default function AdminDashboard() {
             {currentRows.some((r) => "status" in r) && <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">همه وضعیت‌ها</option><option value="pending">در انتظار</option><option value="PENDING">در انتظار</option><option value="APPROVED">تأییدشده</option><option value="REJECTED">ردشده</option><option value="completed">تکمیل‌شده</option><option value="confirmed">تأییدشده</option><option value="failed">ناموفق</option><option value="PAID">پرداخت‌شده</option></select>}
             <button className="ap-ghost" onClick={exportCsv}>↓ خروجی CSV</button></div>
         </div>
-        <div className="ap-card ap-table-card"><div className="ap-table-scroll"><table><thead><tr>{COLUMNS[active].map(([key,label]) => <th key={key}>{label}</th>)}{["purchase_requests","withdrawals"].includes(active) && <th>عملیات</th>}</tr></thead>
+        <div className="ap-card ap-table-card"><div className="ap-table-scroll"><table><thead><tr>{COLUMNS[active].map(([key,label]) => <th key={key}>{label}</th>)}</tr></thead>
           <tbody>{currentRows.map((row, idx) => <tr key={row.id || row.invoice_no || row.reference || idx}>{COLUMNS[active].map(([key]) => {
             const value = row[key];
             const copyable = ["wallet_address","destination_wallet","tx_hash","receipt_hash","payment_tx_hash","sender_address","merchant_address","reference","id"].includes(key);
             const display = key === "wallet_address" || key === "destination_wallet" || key.includes("hash") || key === "sender_address" || key === "merchant_address" ? short(value) : key === "meta" ? short(JSON.stringify(value || {})) : fmt(value);
             return <td key={key} title={value == null ? "" : String(value)}>{copyable && value ? <button className="ap-copy" onClick={() => copy(value, "مقدار")}>{display} ⧉</button> : display}</td>;
           })}
-          {active === "purchase_requests" && <td>{row.status === "PENDING" ? <div className="ap-row-actions"><button className="ap-approve" disabled={!!busy} onClick={() => reviewPurchase(row,"APPROVE")}>{busy === `purchase-${row.id}` ? "…" : "تأیید"}</button><button className="ap-reject" disabled={!!busy} onClick={() => reviewPurchase(row,"REJECT")}>رد</button></div> : <span className={`ap-status ${String(row.status).toLowerCase()}`}>{row.status}</span>}</td>}
-          {active === "withdrawals" && <td>{String(row.status).toUpperCase() === "PENDING" ? <button className="ap-approve" disabled={!!busy} onClick={() => completeWithdrawal(row)}>{busy === `withdraw-${row.id}` ? "…" : "ثبت پرداخت"}</button> : <span className="ap-status">{row.display_status || row.status}</span>}</td>}
           </tr>)}</tbody></table>
           {!currentRows.length && <div className="ap-empty">رکوردی برای نمایش وجود ندارد.</div>}
         </div></div>
