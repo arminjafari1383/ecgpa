@@ -1,0 +1,16 @@
+# Add this service to the EXISTING docker-compose.yml.
+# Assumes your Django API service is named "backend" and listens on port 8000.
+# If it has another service name, change BACKEND_UPSTREAM accordingly.
+services:
+  admin-panel:
+    build:
+      context: ./admin-service
+      dockerfile: Dockerfile
+    container_name: polify-admin-panel
+    restart: unless-stopped
+    environment:
+      BACKEND_UPSTREAM: backend:8000
+    ports:
+      - "1000:1000"
+    depends_on:
+      - backend
