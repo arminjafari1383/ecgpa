@@ -1,0 +1,15 @@
+services:
+  admin-panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: polify-admin-panel
+    restart: unless-stopped
+    environment:
+      # Connect to the existing Django API through the Ubuntu host.
+      # This assumes the backend publishes port 8000 on the host.
+      BACKEND_UPSTREAM: host.docker.internal:8000
+    ports:
+      - "1000:1000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
